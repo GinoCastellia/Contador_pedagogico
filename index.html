@@ -121,36 +121,42 @@
         let timerInterval, isRunning = false, initialTime = 60, timeLeft = 60;
         let messageMilestones = {};
         let isMusicPlaying = false;
-        let binauralBeat;
 
-        function setupMusic() {
-            const leftOsc = new Tone.Oscillator(100, "sine").toDestination();
-            const rightOsc = new Tone.Oscillator(104, "sine").toDestination();
-            const pannerLeft = new Tone.Panner(-1).toDestination();
-            const pannerRight = new Tone.Panner(1).toDestination();
-            leftOsc.connect(pannerLeft);
-            rightOsc.connect(pannerRight);
-            
-            return {
-                start: () => { leftOsc.start(); rightOsc.start(); Tone.Destination.volume.rampTo(0, 0.1); },
-                stop: () => { leftOsc.stop(); rightOsc.stop(); }
-            };
-        }
+        // --- Música Ambiental para Concentración ---
+        // 1. Sintetizador suave con reverberación para un sonido ambiental.
+        const synth = new Tone.FMSynth({
+            harmonicity: 3.01, modulationIndex: 14,
+            envelope: { attack: 0.01, decay: 0.2, sustain: 0.1, release: 1 },
+            modulationEnvelope: { attack: 0.01, decay: 0.5, sustain: 0, release: 0.5 }
+        }).toDestination();
+
+        const reverb = new Tone.Reverb({ decay: 4, preDelay: 0.01, wet: 0.6 }).toDestination();
+        synth.connect(reverb);
+        Tone.Destination.volume.value = -12; // Volumen bajo para no distraer
+
+        // 2. Secuencia de notas calmada y repetitiva.
+        const musicLoop = new Tone.Sequence((time, note) => {
+            synth.triggerAttackRelease(note, "8n", time);
+        }, ["C4", "E4", "G4", "B4", "G4", "E4"], "4n");
+
+        Tone.Transport.bpm.value = 75; // Tempo tranquilo
+        // --- Fin de la configuración de música ---
 
         function toggleMusic() {
-            if (Tone.context.state !== 'running') Tone.start();
-            
+            if (Tone.context.state !== 'running') {
+                Tone.start();
+            }
+            isMusicPlaying = !isMusicPlaying;
             if (isMusicPlaying) {
-                binauralBeat.stop();
-                isMusicPlaying = false;
-                musicIconOn.classList.add('hidden');
-                musicIconOff.classList.remove('hidden');
-            } else {
-                binauralBeat = setupMusic();
-                binauralBeat.start();
-                isMusicPlaying = true;
-                musicIconOff.classList.add('hidden');
+                Tone.Transport.start();
+                musicLoop.start(0);
                 musicIconOn.classList.remove('hidden');
+                musicIconOff.classList.add('hidden');
+            } else {
+                Tone.Transport.stop();
+                musicLoop.stop();
+                musicIconOff.classList.remove('hidden');
+                musicIconOn.classList.add('hidden');
             }
         }
 
@@ -160,10 +166,10 @@
         function playSound(type) {
             if (Tone.context.state !== 'running') Tone.start();
             if (type === 'end') {
-                const synth = new Tone.PolySynth().toDestination();
+                const endSynth = new Tone.PolySynth().toDestination();
                 const now = Tone.now();
-                synth.triggerAttackRelease(["C5", "E5", "G5"], "8n", now);
-                synth.triggerAttackRelease(["G5", "B5", "D6"], "8n", now + 0.2);
+                endSynth.triggerAttackRelease(["C5", "E5", "G5"], "8n", now);
+                endSynth.triggerAttackRelease(["G5", "B5", "D6"], "8n", now + 0.2);
             }
         }
 
@@ -262,6 +268,9 @@
     </script>
 </body>
 </html>
+
+
+
 
 
 
