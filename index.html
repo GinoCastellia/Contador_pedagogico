@@ -3,12 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Contador Pedagógico Estilo LEGO Fortnite</title>
+    <title>Contador Pedagógico con Música de Foco</title>
     <!-- Google Fonts: Lilita One -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Lilita+One&display=swap" rel="stylesheet">
-    <!-- Tailwind CSS (se recomienda en el head) -->
+    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         body {
@@ -41,6 +41,10 @@
             text-shadow: 2px 2px #00000060;
             transition: all 0.1s ease-in-out;
             position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
         }
         .fortnite-lego-button:active {
             transform: translateY(4px);
@@ -48,6 +52,7 @@
         }
         .btn-deploy { background-color: #facc15; } /* Fortnite Gold */
         .btn-reset { background-color: #7209b7; } /* Fortnite Purple */
+        .btn-music { background-color: #00c6ff; } /* Blue */
         
         .progress-bar-container {
             background-color: #1e293b;
@@ -67,7 +72,6 @@
 
     <div class="text-center p-6 sm:p-8 rounded-lg timer-container w-full max-w-lg">
         
-        <!-- Área de Mensajes Pedagógicos -->
         <div class="w-full text-center mb-4 h-32 flex items-center justify-center">
              <div id="pedagogical-message" class="text-2xl text-cyan-300 p-4 transition-all duration-500 ease-in-out opacity-0 transform scale-90"></div>
         </div>
@@ -87,63 +91,73 @@
         <div class="flex justify-center items-center space-x-4">
             <button id="start-pause-btn" class="fortnite-lego-button btn-deploy py-3 px-6 text-xl"></button>
             <button id="reset-btn" class="fortnite-lego-button btn-reset py-3 px-6 text-xl">Reiniciar</button>
+            <button id="music-btn" class="fortnite-lego-button btn-music p-3 text-xl">
+                 <svg id="music-icon-on" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="hidden"><path d="M9 18V5l12-2v13"></path><circle cx="6" cy="18" r="3"></circle><circle cx="18" cy="16" r="3"></circle></svg>
+                 <svg id="music-icon-off" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="1" y1="1" x2="23" y2="23"></line><path d="M9 18V5l12-2v13"></path><circle cx="6" cy="18" r="3"></circle><circle cx="18" cy="16" r="3"></circle></svg>
+            </button>
         </div>
         
         <div id="message-area" class="mt-4 text-red-400 h-4 text-sm"></div>
     </div>
 
-    <!-- Tone.js para sonidos (cargado antes del script principal para que esté disponible) -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.7.77/Tone.js"></script>
 
     <script>
-        // --- SELECCIÓN DE ELEMENTOS DEL DOM ---
         const timeDisplay = document.getElementById('time-display');
         const startPauseBtn = document.getElementById('start-pause-btn');
         const resetBtn = document.getElementById('reset-btn');
+        const musicBtn = document.getElementById('music-btn');
+        const musicIconOn = document.getElementById('music-icon-on');
+        const musicIconOff = document.getElementById('music-icon-off');
         const progressBar = document.getElementById('progress-bar');
         const minutesInput = document.getElementById('minutes-input');
         const secondsInput = document.getElementById('seconds-input');
         const messageArea = document.getElementById('message-area');
         const pedagogicalMessage = document.getElementById('pedagogical-message');
 
-        // --- MENSAJES Y TEXTOS ---
-        const pedagogicalMessages = [
-            "¡Es hora de concentrarse! Revisa tus objetivos.",
-            "Lee las instrucciones con atención. ¡Cada detalle cuenta!",
-            "Colabora con tu compañero. ¡Dos mentes piensan mejor!",
-            "Revisa tu trabajo. ¿Puedes mejorarlo?",
-            "¡La creatividad es tu superpoder! Úsala.",
-            "¡Silencio y enfoque! Estás creando algo increíble."
-        ];
-        const playText = `¡Empezar!`;
-        const pauseText = `Pausa`;
-        const continueText = `Seguir`;
+        const pedagogicalMessages = [ "¡Es hora de concentrarse! Revisa tus objetivos.", "Lee las instrucciones con atención. ¡Cada detalle cuenta!", "Colabora con tu compañero. ¡Dos mentes piensan mejor!", "Revisa tu trabajo. ¿Puedes mejorarlo?", "¡La creatividad es tu superpoder! Úsala.", "¡Silencio y enfoque! Estás creando algo increíble." ];
+        const playText = `¡Empezar!`, pauseText = `Pausa`, continueText = `Seguir`;
         
-        // --- VARIABLES DE ESTADO ---
         let timerInterval, isRunning = false, initialTime = 60, timeLeft = 60;
         let messageMilestones = {};
+        let isMusicPlaying = false;
+        let binauralBeat;
 
-        // --- FUNCIONES PRINCIPALES ---
+        function setupMusic() {
+            const leftOsc = new Tone.Oscillator(100, "sine").toDestination();
+            const rightOsc = new Tone.Oscillator(104, "sine").toDestination();
+            const pannerLeft = new Tone.Panner(-1).toDestination();
+            const pannerRight = new Tone.Panner(1).toDestination();
+            leftOsc.connect(pannerLeft);
+            rightOsc.connect(pannerRight);
+            
+            return {
+                start: () => { leftOsc.start(); rightOsc.start(); Tone.Destination.volume.rampTo(0, 0.1); },
+                stop: () => { leftOsc.stop(); rightOsc.stop(); }
+            };
+        }
 
-        /**
-         * Formatea segundos a un string MM:SS.
-         * @param {number} s - Segundos totales.
-         * @returns {string} Tiempo formateado.
-         */
+        function toggleMusic() {
+            if (Tone.context.state !== 'running') Tone.start();
+            
+            if (isMusicPlaying) {
+                binauralBeat.stop();
+                isMusicPlaying = false;
+                musicIconOn.classList.add('hidden');
+                musicIconOff.classList.remove('hidden');
+            } else {
+                binauralBeat = setupMusic();
+                binauralBeat.start();
+                isMusicPlaying = true;
+                musicIconOff.classList.add('hidden');
+                musicIconOn.classList.remove('hidden');
+            }
+        }
+
         function formatTime(s) { return `${Math.floor(s/60)}:${(s%60)<10?'0':''}${s%60}` }
-
-        /**
-         * Actualiza la barra de progreso.
-         * @param {number} p - Porcentaje (0-100).
-         */
         function setProgress(p) { progressBar.style.width = `${p}%` }
         
-        /**
-         * Reproduce sonidos para eventos clave.
-         * @param {string} type - 'end' para el final.
-         */
         function playSound(type) {
-            // Inicia el contexto de audio si el navegador lo requiere
             if (Tone.context.state !== 'running') Tone.start();
             if (type === 'end') {
                 const synth = new Tone.PolySynth().toDestination();
@@ -153,14 +167,9 @@
             }
         }
 
-        /**
-         * Muestra un mensaje pedagógico con una animación de aparición.
-         * @param {string} message - El mensaje a mostrar.
-         */
         function showPedagogicalMessage(message) {
             pedagogicalMessage.classList.remove('opacity-100', 'scale-100');
             pedagogicalMessage.classList.add('opacity-0', 'scale-90');
-            
             setTimeout(() => {
                 pedagogicalMessage.textContent = message;
                 pedagogicalMessage.classList.remove('opacity-0', 'scale-90');
@@ -168,10 +177,6 @@
             }, 300);
         }
 
-        /**
-         * Habilita o deshabilita los inputs de tiempo.
-         * @param {boolean} enabled - True para habilitar, false para deshabilitar.
-         */
         function toggleInputs(enabled) {
             minutesInput.disabled = !enabled; 
             secondsInput.disabled = !enabled;
@@ -179,16 +184,12 @@
             secondsInput.classList.toggle('opacity-50', !enabled);
         }
 
-        /**
-         * Inicia, pausa o reanuda el temporizador.
-         */
         function startPauseTimer() {
             if (isRunning) {
                 clearInterval(timerInterval);
                 isRunning = false;
                 startPauseBtn.textContent = continueText;
             } else {
-                // Si el contador no está en pausa, lo inicia desde cero
                 if (!timerInterval) {
                     initialTime = (parseInt(minutesInput.value) || 0) * 60 + (parseInt(secondsInput.value) || 0);
                     if (initialTime <= 0) {
@@ -197,12 +198,9 @@
                         return;
                     }
                     timeLeft = initialTime;
-                    
-                    // Reinicia los hitos de mensajes y muestra el primero
                     messageMilestones = { m75: false, m50: false, m25: false };
                     showPedagogicalMessage(pedagogicalMessages[0]);
                 }
-                
                 isRunning = true; 
                 startPauseBtn.textContent = pauseText;
                 toggleInputs(false);
@@ -213,19 +211,10 @@
                     setProgress(percentLeft);
                     timeDisplay.textContent = formatTime(timeLeft);
 
-                    // Revisa los hitos de tiempo para mostrar mensajes
-                    if (percentLeft < 75 && !messageMilestones.m75) {
-                        showPedagogicalMessage(pedagogicalMessages[1]);
-                        messageMilestones.m75 = true;
-                    } else if (percentLeft < 50 && !messageMilestones.m50) {
-                        showPedagogicalMessage(pedagogicalMessages[2]);
-                        messageMilestones.m50 = true;
-                    } else if (percentLeft < 25 && !messageMilestones.m25) {
-                        showPedagogicalMessage(pedagogicalMessages[3]);
-                        messageMilestones.m25 = true;
-                    }
+                    if (percentLeft < 75 && !messageMilestones.m75) { showPedagogicalMessage(pedagogicalMessages[1]); messageMilestones.m75 = true; }
+                    else if (percentLeft < 50 && !messageMilestones.m50) { showPedagogicalMessage(pedagogicalMessages[2]); messageMilestones.m50 = true; }
+                    else if (percentLeft < 25 && !messageMilestones.m25) { showPedagogicalMessage(pedagogicalMessages[3]); messageMilestones.m25 = true; }
 
-                    // Cuando el tiempo llega a cero
                     if (timeLeft <= 0) {
                         clearInterval(timerInterval);
                         timerInterval = null; 
@@ -241,9 +230,6 @@
             }
         }
         
-        /**
-         * Reinicia el temporizador a su estado inicial.
-         */
         function resetTimer() {
             clearInterval(timerInterval);
             timerInterval = null; 
@@ -259,9 +245,6 @@
             pedagogicalMessage.classList.add('opacity-0', 'scale-90');
         }
         
-        /**
-         * Actualiza el display del tiempo cuando se cambia el valor en los inputs.
-         */
         function updateDisplayFromInputs() {
             if (isRunning) return;
             const totalSeconds = (parseInt(minutesInput.value) || 0) * 60 + (parseInt(secondsInput.value) || 0);
@@ -269,15 +252,15 @@
             setProgress(100);
         }
         
-        // --- ASIGNACIÓN DE EVENTOS ---
+        musicBtn.addEventListener('click', toggleMusic);
         startPauseBtn.addEventListener('click', startPauseTimer);
         resetBtn.addEventListener('click', resetTimer);
         minutesInput.addEventListener('input', updateDisplayFromInputs);
         secondsInput.addEventListener('input', updateDisplayFromInputs);
         
-        // --- INICIALIZACIÓN ---
-        // Llama a resetTimer() para establecer el estado inicial al cargar la página.
         resetTimer();
     </script>
 </body>
 </html>
+
+
